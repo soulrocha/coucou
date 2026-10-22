@@ -265,12 +265,19 @@ fn note_session_window(pipe: &impl Relay, payload: &Value, event: &str) {
     if session_window::known(session) {
         return;
     }
-    let Some(relay) = pipe.client_pid() else { return };
+    let Some(relay) = pipe.client_pid() else {
+        crate::log::line(format!("session window [{event}]: no relay pid"));
+        return;
+    };
     let ancestors = crate::platform::process_ancestors(relay);
     // No ancestors: the relay was already gone, so try again next time. Some,
     // but none with a window (a classic console): settled, VS Code it is.
     if !ancestors.is_empty() {
-        session_window::remember(session, crate::platform::window_owners(&ancestors));
+        let owners = crate::platform::window_owners(&ancestors);
+        crate::log::line(format!("session window [{event}]: ancestors={ancestors:?} owners={owners:?}"));
+        session_window::remember(session, owners);
+    } else {
+        crate::log::line(format!("session window [{event}]: relay {relay} gone, no ancestors"));
     }
 }
 

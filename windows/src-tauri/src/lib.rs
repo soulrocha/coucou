@@ -314,12 +314,15 @@ fn open_in_vscode(path: Option<String>) -> bool {
 #[tauri::command]
 fn open_session(session_id: Option<String>, path: Option<String>) -> bool {
     let Some(owners) = session_id.as_deref().and_then(session_window::lookup) else {
+        log::line(format!("open_session: session {:?} not remembered, VS Code", session_id.as_deref().map(|s| s.chars().take(8).collect::<String>())));
         return open_in_vscode(path);
     };
     let folder = path.as_deref().map(session_window::folder_name).unwrap_or_default().to_string();
     #[cfg(windows)]
     {
-        if platform::focus_session_window(&owners, &folder) {
+        let raised = platform::focus_session_window(&owners, &folder);
+        log::line(format!("open_session: owners={owners:?} folder={folder:?} raised={raised}"));
+        if raised {
             return true;
         }
         open_in_vscode(path)
