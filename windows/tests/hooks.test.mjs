@@ -196,6 +196,33 @@ test("the end of a session puts the pill back as it was", () => {
   assert.deepEqual(task().steps, []);
 });
 
+// One pill serves every Claude Code session, and some clients start sessions of their own that end
+// seconds later. Their SessionEnd used to wipe the id of the session the user is working in, so
+// "Open terminal" had nothing to look up and fell back to VS Code.
+test("a short session ending does not take the working session off the pill", () => {
+  hook({ hook_event_name: "PreToolUse", session_id: "chat", cwd: "/p/chat", tool_name: "Bash", tool_input: { command: "ls" } });
+  hook({ hook_event_name: "SessionStart", session_id: "helper", cwd: "/p/helper" });
+  assert.equal(task().sessionId, "helper");
+  hook({ hook_event_name: "SessionEnd", session_id: "helper", cwd: "/p/helper" });
+  assert.equal(task().sessionId, "chat");
+  assert.equal(task().sessionCwd, "/p/chat");
+  // The last session to end leaves nothing to open.
+  hook({ hook_event_name: "SessionEnd", session_id: "chat", cwd: "/p/chat" });
+  assert.equal(task()?.sessionId ?? null, null);
+});
+
+test("sessions come back in the order they were last heard from", () => {
+  for (const s of ["a", "b", "c"]) {
+    hook({ hook_event_name: "PreToolUse", session_id: s, cwd: "/p/" + s, tool_name: "Bash", tool_input: { command: "ls" } });
+  }
+  hook({ hook_event_name: "PostToolUse", session_id: "a", cwd: "/p/a" });
+  hook({ hook_event_name: "SessionEnd", session_id: "a", cwd: "/p/a" });
+  assert.equal(task().sessionId, "c");
+  hook({ hook_event_name: "SessionEnd", session_id: "c", cwd: "/p/c" });
+  assert.equal(task().sessionId, "b");
+  assert.equal(task().sessionCwd, "/p/b");
+});
+
 // Stop arms a 5.2 s timer that puts the pill back to idle. It used to be armed
 // and forgotten, so a prompt submitted inside that window showed as thinking and
 // was then put back to idle mid-work when the old timer fired.

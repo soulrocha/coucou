@@ -5,6 +5,7 @@
 // The relay has already mapped every agent's events and fields onto Claude
 // Code's (hook/src/normalize.rs), so one handler serves them all.
 
+import { end, follow } from "../core/sessions";
 import { Bridge, onEvent } from "../core/bridge";
 import { buildFileDiff, fileName, makeDiffStep, toOneLine } from "../core/diff";
 import { Sound } from "../core/sound";
@@ -195,14 +196,19 @@ function askedQuestions(tool: string, input: Record<string, unknown>): AskedQues
 /** The Claude Code session's pill, named after its project for the session. */
 function upsert(id: string, projectName: string, cwd: string, sessionId: string) {
   const t = State.upsertWorkspacePill(id, projectName, cwd);
-  if (t && sessionId) t.sessionId = sessionId;
+  if (t && sessionId) {
+    t.sessionId = sessionId;
+    t.liveSessions = follow(t.liveSessions ?? [], sessionId, cwd);
+  }
 }
 
 /** The session is over: the pill goes back as it was, or away if it was only there for it. */
-function clearSession(id: string) {
+/** `ended` is the session that stopped; the pill keeps following the others, if any. */
+function clearSession(id: string, ended = "") {
   const t = State.tasks.find((x) => x.id === id);
   if (!t) return;
-  if (!State.isKept(id)) {
+  const left = ended && t.liveSessions ? end(t.liveSessions, ended) : [];
+  if (!State.isKept(id) && left.length === 0) {
     State.removeTask(id);
     return;
   }
@@ -212,7 +218,9 @@ function clearSession(id: string) {
   delete t.stepSeq;
   t.name = pillDefinition(id)?.name ?? t.name;
   t.pillBadge = null;
-  t.sessionId = null;
+  t.liveSessions = left;
+  t.sessionId = left[0]?.id ?? null;
+  if (left[0]?.cwd) t.sessionCwd = left[0].cwd;
   t.finalLine = null;
 }
 
@@ -462,7 +470,7 @@ function handleHook(island: Island, payload: HookPayload) {
         State.removeTask(agentId);
       } else {
         State.updateTask(agentId, "idle");
-        clearSession(agentId);
+        clearSession(agentId, sessionId);
       }
       break;
 

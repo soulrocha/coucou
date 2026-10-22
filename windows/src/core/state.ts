@@ -1,5 +1,6 @@
 // App state — mirror of AppState.swift (the parts the island needs).
 
+import type { LiveSession } from "./sessions";
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 import {
@@ -37,6 +38,8 @@ export interface AgentTask {
   sessionCwd?: string | null;
   /** Claude Code's session, so "Open terminal" can find the window it runs in. */
   sessionId?: string | null;
+  /** The sessions the pill follows, newest first (sessions.ts); `sessionId` is the first. */
+  liveSessions?: LiveSession[];
   /** Claude's final message after Stop, one line; cleared when a new turn starts. */
   finalLine?: string | null;
 }
